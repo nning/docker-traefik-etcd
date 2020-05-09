@@ -1,0 +1,44 @@
+version: '3'
+
+services:
+  traefik:
+    image: traefik:v2.2
+    container_name: traefik
+    command:
+      # - --log.level=DEBUG
+      # - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.http.address=:80
+      - --entrypoints.etcd.address=:2379
+      - --certificatesresolvers.letsencrypt.acme.email=ssl@example.com
+      - --certificatesresolvers.letsencrypt.acme.storage=acme.json
+      - --certificatesresolvers.letsencrypt.acme.keytype=EC384
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=http
+    ports:
+      - 80:80
+      - 2379:2379
+      # - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.4.7
+    container_name: etcd
+    volumes:
+      - ./data:/data
+    command:
+      - etcd
+      - --data-dir=/data
+      - --listen-client-urls=http://[::]:2379
+      - --advertise-client-urls=http://[::]:2379
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.etcd.service=srv-grpc
+      - traefik.http.routers.etcd.rule=Host(`example.com`)
+      - traefik.http.routers.etcd.entrypoints=etcd
+      - traefik.http.routers.etcd.tls=true
+      - traefik.http.routers.etcd.tls.certresolver=letsencrypt
+      - traefik.http.services.srv-grpc.loadbalancer.server.scheme=h2c
+    restart: unless-stopped
